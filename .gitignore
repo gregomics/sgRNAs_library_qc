@@ -34,7 +34,7 @@ Thumbs.db
 *.bai
 *.tsv
 data/*
-
+trimmed/*
 # Sequencing data #
 ###################
 *.fq*
