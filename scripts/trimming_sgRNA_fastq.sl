@@ -9,7 +9,7 @@
 
 
 seqdir=/mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/data/
-outdir=/mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/trimmed/
+outdir=/mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/trimmedLinkedBC/
 
 # declaring array to parallelise the call at SLURM level
 r1merged_files=($(ls $seqdir/*.merged_R1.fq.gz))
@@ -31,12 +31,13 @@ if [ -f $r1file ]; then
    module load Python/3.5.2-foss-2016b
    prefix=($(basename $r1file))
    prefixOut=$outdir${prefix/_R1\.fq\.gz/_trimmed_R1\.fq\.gz}
-   summaryOut=$outdir${prefix/_R1\.fq\.gz/_trimmed_R1_summary.txt}
-   toolong=$outdir${prefix/_R1\.fq\.gz/_trimmed_R1_too_long.fq.gz}
-   tooshort=$outdir${prefix/_R1\.fq\.gz/_trimmed_R1_too_short.fq.gz}
-   echo "running: cutadapt -j 8 --trimmed-only --error-rate=0 -g CTTGTGGAAAGGACGAAACACCG -a GTTTTAGAGCTAGAAATAGCAAG --max-n=0 -m 20 -M 20 -o $prefixOut --info-file=$summaryOut $r1file "
-
-   srun cutadapt -j 8 --trimmed-only --error-rate=0 -g CTTGTGGAAAGGACGAAACACCG -a GTTTTAGAGCTAGAAATAGCAAG --max-n=0 -m 20 -M 20 -o $prefixOut --info-file=$summaryOut --too-long-output=$toolong --too-short-output=$tooshort $r1file
+   only20nts=$outdir${prefix/_R1\.fq\.gz/_trimmed_R1_only_20.fq}
+   # Note new 5': CAACTTGTGGAAAGGACGAAACACCG
+   echo "running: cutadapt -j 8 --trimmed-only --error-rate=0 -g GCTTGTGGAAAGGACGAAACACCG -a GTTTTAGAGCTAGAAATAGCAAG --max-n=0 -o $prefixOut $r1file"
+   
+   srun cutadapt -j 8 --trimmed-only --error-rate=0 -g GCTTGTGGAAAGGACGAAACACCG...GTTTTAGAGCTAGAAATAGCAA --max-n=0 -o $prefixOut $r1file
+   
+   srun zcat $prefixOut | awk 'BEGIN {OFS = "\n"} {header = $0 ; getline seq ; getline qheader ; getline qseq ; if (length(seq) == 20) {print header, seq, qheader, qseq}}' > $only20nts
 
    
 else

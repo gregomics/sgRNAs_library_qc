@@ -6,7 +6,7 @@ There is a total of 78,637 targeting 19,674 genes around 3+ sgRNA per gene.
 
 The goal of this analysis is to define if the sgRNA library cover the whole transcriptome.
 4 different samples were sequenced. They should be considered as technical reps.
-Here is a detailed info for the Brie library: [https://media.addgene.org/cms/filer_public/be/cd/becdf7c4-ea7a-41a3-96c9-ef2bc3c85979/broadgpp-brie-library-contents.txt](library content).
+Here is a detailed info for the Brie library: [library content](https://media.addgene.org/cms/filer_public/be/cd/becdf7c4-ea7a-41a3-96c9-ef2bc3c85979/broadgpp-brie-library-contents.txt).
 ## Sequencing 
 
 The sequencing was performed at Auckland on NextSeq 550. We received 2 zips:
@@ -48,13 +48,15 @@ sgRNA are integrated in a specific site where we know the flanking sequences.
 We have done this using cutadapt and with zero mismatch tolerance.
 The sequences to be trimmed are the following:
 
-  * 5' CTTGTGGAAAGGACGAAACACCG (-g option)
-  * 3' GTTTTAGAGCTAGAAATAGCAAG (-a option)
+  * 5' CTTGTGGAAAGGACGAAACACCG 
+  * 3' GTTTTAGAGCTAGAAATAGCAAG 
 
 we will use cutadapt with the following option:
+  
+  * -g GCTTGTGGAAAGGACGAAACACCG...GTTTTAGAGCTAGAAATAGCAA
 
-  * -g CTTGTGGAAAGGACGAAACACCG
-  * -a GTTTTAGAGCTAGAAATAGCAAG
+    This tells cutadapt that there is a linked adaptor and that we need to extract the sequence in between.
+
   * --trimmed-only: keep only the trimmed
   * --error-rate=0: No error rate allowed
   * -m 20 and -M 20 min and max length 20.
@@ -65,11 +67,40 @@ Here is the slurm script to launch:
 sbatch --array=1-4%4 /mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/scripts/trimming_sgRNA_fastq.sl
 
 ```
+The output of this script is stored: /mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/trimmedLinkedBC/
+2 files by sample:
 
+  * sampleName.merged_trimmed_R1.fq.gz: trimmed R1
+  * sampleName.merged_trimmed_R1_only_20.fq: trimmed R1 with a remaining size of 20nts exactly.
+
+## Counting the number of read after trimming:
+
+Get a csv file with sample name and total number of sgRNA:
+
+```
+# creating the summary file:
+touch summary_sgRNAs.csv
+
+for fastq in /mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/trimmedLinkedBC/merged_trimmed_R1_only_20.fq
+do
+   # get only the filename
+   fastqBase=$(basename $fastq)
+   # get rid of the .merged_trimmed_R1_only_20.fq
+   sample=${fastqBase/.merged_trimmed_R1_only_20.fq/}
+   # counting the number of line and /4 -> 4 lines for a seq.
+   count=$(echo $(cat ${fastq} | wc -l)/4|bc)
+   # printing in a file
+   echo "$sample,$count" >> summary_sgRNAs.csv
+done
+
+
+```
 
 ## constructing the sgRNA library for mapping:
 
-We need to download the data:
+We need to download the data. There are 2 sets of data available:
+
+  1. sgRNA library targeting mouse genes:
 
 ```
 wget https://media.addgene.org/cms/filer_public/be/cd/becdf7c4-ea7a-41a3-96c9-ef2bc3c85979/broadgpp-brie-library-contents.txt
@@ -78,14 +109,34 @@ wget https://media.addgene.org/cms/filer_public/be/cd/becdf7c4-ea7a-41a3-96c9-ef
 Note: This is a CR delimitated file so we need to convert to fasta file for indexing:
 
 ```
-sed -e "s/\r/\n/g" broadgpp-brie-library-contents.txt | cut -f 2,7 | awk 'BEGIN{OFS="\n"}{header=">sgRNA_" $1 "_" NR; print header, $2}'; > brie_sgRNAs_library.fa
+sed -e "s/\r/\n/g" broadgpp-brie-library-contents.txt | cut -f 2,7 | awk 'BEGIN{OFS="\n"}{header=">sgRNA_" $1 "_" NR; print header, $2}' > brie_sgRNAs_library.fa
 
 ```
+  2. Control sgRNAs: 
+
+```
+ wget https://www.addgene.org/static/cms/filer_public/5c/ca/5cca8516-45a7-4d83-bfb2-d960c4ab9de5/broadgpp-brie-library-controls.csv
+
+```
+convertion from csv to fasta file:
+
+
+```
+cat broadgpp-brie-library-controls.csv | sed -e "s/\"//g" | awk 'BEGIN{FS=","}{OFS="\n"}{header=">" $2; print header, $1}' > brie_ctrl_sgRNAs_library.fa
+
+```
+
+The whole sgRNA library will include both sgRNA targeting genes and control.
+
+```
+cat brie_sgRNAs_library.fa brie_ctrl_sgRNAs_library.fa > total_sgRNAs_library.fa
+```
+
 Creating the index for BWA alignment:
 
 ```
 module load BWA
-bwa index -a bwtsw /mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/data/brie_sgRNAs_library.fa
+bwa index -a bwtsw /mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/data/total_sgRNAs_library.fa
 
 ```
 
@@ -97,7 +148,7 @@ Then align in bwa using the backtrack method and allowing nil mismatch
 #Align, parse to sam, convert to bam for sorting and indexing then back to sam in case a human-readable file is needed
 
 ```
-bwa_index=/mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/data/brie_sgRNAs_library.fa
+bwa_index=/mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/data/total_sgRNAs_library.fa
 mapping_dir=/mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/mapping/
 module load BWA SAMtools
 
