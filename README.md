@@ -1,6 +1,6 @@
 # sgRNA library diversity QC
 
-sgRNA library were produced using Brie library from [https://www.addgene.org/pooled-library/broadgpp-mouse-knockout-brie/](addgene).
+sgRNA library were produced using Brie library from [addgene](https://www.addgene.org/pooled-library/broadgpp-mouse-knockout-brie/).
 
 There is a total of 78,637 targeting 19,674 genes around 3+ sgRNA per gene. 
 
@@ -145,25 +145,43 @@ bwa index -a bwtsw /mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/d
 Then align in bwa using the backtrack method and allowing nil mismatch
 
 
-#Align, parse to sam, convert to bam for sorting and indexing then back to sam in case a human-readable file is needed
+```
+sbatch --array=1-4%4 /mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/scripts/mapping_sgRNAs_to_reference.sl
 
 ```
-bwa_index=/mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/data/total_sgRNAs_library.fa
-mapping_dir=/mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/mapping/
-module load BWA SAMtools
+SLURM script does the following:
+  * bwa aln
+  * bwa samse
+  * sam to sorted bam
+  * index sorted bam
 
-for fastq in /mnt/hcs/dsm-pathology-hibma-research-lab/sgRNAs_library_qc/trimmed/*_trimmed_R1.fq.gz 
-   do echo "processing fastq: $fastq"
-   filename=($(basename $fastq))
-   sai=$mapping_dir${filename/_trimmed_R1\.fq\.gz/\.sai} 
-   bwa aln $bwa_index $file > $sai
-   sam=${sai/\.sai/\.sam}
-   # keep the sam for now:
-   bwa samse $bwa_index $sai $fastq > $sam
-   bam=${sam/\.sam/\_sorted.bam}
-   samtools view -b -@ 8 $sam | samtools sort -@ 8 -o $bam
-   samtools index $bam
-done
+results can be found under: mapping/ e.g.: Brie-A04_S3.merged_sorted.bam
+
+## getting count by sgRNA
+
+To get the count (number of read aligned to sgRNA lib) we will use featureCounts.
+featureCounts can be used with SAF format which is a tabulated format containing the following info:
+
+  * GeneID
+  * Chr
+  * Start
+  * End
+  * Strand
+
+We expect to have the sgRNA in the proper strand.
+
+### creating SAF from 
+
+```
+cat data/total_sgRNAs_library.fa | sed -e "s/^>//g" | awk 'BEGIN {FS="\n"}{OFS = "\t"} {header = $0 ; getline seq ; {print header, "1", length(seq), "+"}}' > data/total_sgRNAs_library.saf
+
 ```
 
+### get actual data:
+
+
+```
+# strand specific
+featureCounts -F SAF -a data/total_sgRNAs_library.saf -s 1 -o AllSamplesCount.csv *.bam
+```
 
