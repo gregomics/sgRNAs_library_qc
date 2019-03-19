@@ -170,10 +170,10 @@ featureCounts can be used with SAF format which is a tabulated format containing
 
 We expect to have the sgRNA in the proper strand.
 
-### creating SAF from 
+### creating SAF from fasta file
 
 ```
-cat data/total_sgRNAs_library.fa | sed -e "s/^>//g" | awk 'BEGIN {FS="\n"}{OFS = "\t"} {header = $0 ; getline seq ; {print header, "1", length(seq), "+"}}' > data/total_sgRNAs_library.saf
+cat data/total_sgRNAs_library.fa | sed -e "s/^>//g" | awk 'BEGIN {FS="\n"}{OFS = "\t"} {header = $0 ; getline seq ; {print header, header, "1", length(seq), "+"}}' > data/total_sgRNAs_library.saf
 
 ```
 
@@ -182,6 +182,6 @@ cat data/total_sgRNAs_library.fa | sed -e "s/^>//g" | awk 'BEGIN {FS="\n"}{OFS =
 
 ```
 # strand specific
-featureCounts -F SAF -a data/total_sgRNAs_library.saf -s 1 -o AllSamplesCount.csv *.bam
+featureCounts -F SAF -a data/total_sgRNAs_library.saf  -o AllSamplesCount.csv *.bam
 ```
 
